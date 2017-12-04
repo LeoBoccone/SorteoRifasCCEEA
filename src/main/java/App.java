@@ -17,28 +17,31 @@ import java.util.TreeMap;
 
 public class App
 {
-	public static final String PROJECT_NAME = "sorteo - 4ta - solo aleatorio";
-	
 	public static final String PATH_PROJECT = System.getProperty("user.dir").concat("/");
-	//public static final String PATH_PROJECT = "C:\\Users\\Alejandro Brusco\\git\\sorteoRifas\\".concat(PROJECT_NAME).concat("\\");
 	public static final String PATH_GENERADOS = PATH_PROJECT.concat("generados/");
 	private static final String TOTAL_CSV = PATH_PROJECT.concat("generados/TOTAL.csv");
-	//private static final String TOTAL_TXT = PATH_PROJECT.concat("generados/TOTAL.txt");
 	private static final String TOTAL_AUN_DISPONIBLES_TXT = PATH_PROJECT.concat("generados/TOTAL_AUN_DISPONIBLES.txt");
-	private static  String FILENAME_PEDIDOS_EXTRA = PATH_PROJECT;
-	//private static final String FILENAME_PEDIDOS_EXTRA = PATH_PROJECT.concat("PedidosExtra.txt");
+    private static final String FILENAME_PEDIDAS = PATH_PROJECT.concat("Pedidas.txt");
+    private static final String FILENAME_TITULARES = PATH_PROJECT.concat("Titulares.txt");
+    private static final String FILENAME_ACOMPANANTES = PATH_PROJECT.concat("Acompanantes.txt");
+	private static String FILENAME_PEDIDOS_EXTRA = PATH_PROJECT;
 	private static String FILENAME_RIFAS_DISPONIBLES = PATH_PROJECT;
-	//private static final String FILENAME_RIFAS_DISPONIBLES = PATH_PROJECT.concat("RifasDisponibles.txt");
-	
-	private static Integer primerRifa = 99999;
-	private static Integer ultimaRifa = 0;
+
+	private static Integer primerRifa = 1000;
+	private static Integer ultimaRifa = 82999;
+	private static final Integer MAX_INTENTOS_TERMINACION = 1000;
+	private static final Integer CANT_RIFAS_POR_INTEGRANTE = 100;
+	private static final Integer MAX_RIFAS_A_PEDIR = 5;
+
 	private static Integer completos = 0;
 	private static Integer cant_titulares = 0;
-	private static Integer cant_rifas_pedidas_total = 0;
+    private static Integer cant_acompanantes = 0;
+    private static Integer cant_rifas_pedidas_total = 0;
 	private static Random rnd = new Random();
 	private static SortedMap<Integer, Integer> rifasAsignadas = new TreeMap<>();
-	private static ArrayList<Integer> rifasDisponibles = new ArrayList<Integer>();
-	private static ArrayList<Integrante> integrantes = new ArrayList<Integrante>();
+	private static ArrayList<Integer> rifasDisponibles = new ArrayList<>();
+	private static ArrayList<Integrante> integrantes = new ArrayList<>();
+    private static ArrayList<Integrante> integrantesPrimerasRifas = new ArrayList<>();
 	
 	
 	// **************
@@ -51,60 +54,184 @@ public class App
 		if (!Files.isDirectory(Paths.get(PATH_GENERADOS))){
 			Files.createDirectory(Paths.get(PATH_GENERADOS));
 		}
-		initializePedidosExtra();
+        initializeTitulares();
+        initializeAcompanantes();
+        if (!FILENAME_PEDIDOS_EXTRA.equals(PATH_PROJECT) && !FILENAME_RIFAS_DISPONIBLES.equals(PATH_PROJECT)) {
+            initializePedidosExtra();
+        }
+        System.out.println("# Rifas disponibles pre-pedidas: " + rifasDisponibles.size());
 		initializeRifas();
 		System.out.println("# Rifas pedidas = " + cant_rifas_pedidas_total + " - Rifas disponibles: " + rifasDisponibles.size());
 		if (cant_rifas_pedidas_total > rifasDisponibles.size()) {
 			throw new Exception("ERROR: Hay más rifas pedidas que las disponibles.");
 		}
 	}
+
+    private static void initializeTitulares() throws IOException{
+        System.out.println("# INICIO - initializeTitulares");
+        String idTitularStr;
+        Integer idTitular;
+        try (BufferedReader br = new BufferedReader(new FileReader(FILENAME_TITULARES))) {
+            while ((idTitularStr = br.readLine()) != null) {
+                idTitular = Integer.valueOf(idTitularStr);
+                Integrante integrante = new Integrante(idTitular, CANT_RIFAS_POR_INTEGRANTE);
+                integrantes.add(integrante);
+                integrantesPrimerasRifas.add(integrante);
+                cant_titulares++;
+            }
+        } catch (IOException e) {
+            throw e;
+        }
+        System.out.println("# FIN - initializeTitulares");
+    }
+
+    private static void initializeAcompanantes() throws IOException{
+        System.out.println("# INICIO - initializeAcompanantes");
+        String idTitularAsociado;
+        try (BufferedReader br = new BufferedReader(new FileReader(FILENAME_ACOMPANANTES))) {
+            while ((idTitularAsociado = br.readLine()) != null) {
+                Integrante integranteTitular = findIntegranteById(Integer.valueOf(idTitularAsociado), false);
+                if (integranteTitular == null) {
+                    System.out.println("ERROR: El titular número " + idTitularAsociado + " no existe por lo tanto no se le puede asociar acompañante. Verifique nuevamente");
+                }
+                integranteTitular.setConAcompanante(true);
+                cant_acompanantes++;
+            }
+        } catch (IOException e) {
+            throw e;
+        }
+        System.out.println("# FIN - initializeAcompanantes");
+    }
 	
 	private static void initializePedidosExtra() throws IOException{
 		System.out.println("# INICIO - initializePedidosExtra");
-    	
-    	try (BufferedReader br = new BufferedReader(new FileReader(FILENAME_PEDIDOS_EXTRA))) {
-			String linea, idTitularStr, cantRifasPedidas;
-			while ((linea = br.readLine()) != null) {
-				idTitularStr = linea.split("=")[0];
-				cantRifasPedidas = linea.split("=")[1];
-				cant_rifas_pedidas_total += Integer.valueOf(cantRifasPedidas);
-				Integrante integrante = new Integrante(Integer.valueOf(idTitularStr), Integer.valueOf(cantRifasPedidas));
-				integrantes.add(integrante);
-				cant_titulares++;
-			}
-		} catch (IOException e) {
-		   throw e;
-		}
+
+		if (Files.exists(Paths.get(FILENAME_PEDIDOS_EXTRA))) {
+            try (BufferedReader br = new BufferedReader(new FileReader(FILENAME_PEDIDOS_EXTRA))) {
+                String linea, idTitularStr, cantRifasPedidas;
+                while ((linea = br.readLine()) != null) {
+                    idTitularStr = linea.split("=")[0];
+                    cantRifasPedidas = linea.split("=")[1];
+                    cant_rifas_pedidas_total += Integer.valueOf(cantRifasPedidas);
+                    Integrante integrante = new Integrante(Integer.valueOf(idTitularStr), Integer.valueOf(cantRifasPedidas));
+                    integrantes.add(integrante);
+                    cant_titulares++;
+                }
+            } catch (IOException e) {
+                throw e;
+            }
+        }
     	System.out.println("# FIN - initializePedidosExtra");
     }
 	
 	private static void initializeRifas() throws IOException{
 		System.out.println("# INICIO - initializePrimerasRifas");
-		
-		try (BufferedReader br = new BufferedReader(new FileReader(FILENAME_RIFAS_DISPONIBLES))) {
-			String rifaStr;
-			Integer rifa;
-			while ((rifaStr = br.readLine()) != null) {
-				rifa = Integer.valueOf(rifaStr);
-				rifasDisponibles.add(rifa);
-				if (rifa < primerRifa) {
-					primerRifa = rifa;
-				}
-				if (rifa > ultimaRifa) {
-					ultimaRifa = rifa;
-				}
-			}
-		} catch (IOException e) {
-		   throw e;
-		}
-		
-		System.out.println("# FIN - initializePrimerasRifas");
-	}
+
+        for (Integer i=primerRifa;i<=ultimaRifa;i++){
+            rifasDisponibles.add(i);
+        }
+        initializeAsignacionRifasPedidas();
+
+        if (!FILENAME_PEDIDOS_EXTRA.equals(PATH_PROJECT) && !FILENAME_RIFAS_DISPONIBLES.equals(PATH_PROJECT)) {
+            try (BufferedReader br = new BufferedReader(new FileReader(FILENAME_RIFAS_DISPONIBLES))) {
+                String rifaStr;
+                Integer rifa;
+                while ((rifaStr = br.readLine()) != null) {
+                    rifa = Integer.valueOf(rifaStr);
+                    rifasDisponibles.add(rifa);
+                    if (rifa < primerRifa) {
+                        primerRifa = rifa;
+                    }
+                    if (rifa > ultimaRifa) {
+                        ultimaRifa = rifa;
+                    }
+                }
+            } catch (IOException e) {
+                throw e;
+            }
+        }
+
+        System.out.println("# FIN - initializePrimerasRifas");
+    }
+
+    private static void initializeAsignacionRifasPedidas() throws IOException{
+        System.out.println("# INICIO - initializeAsignacionRifasPedidas");
+        boolean ok;
+        try (BufferedReader br = new BufferedReader(new FileReader(FILENAME_PEDIDAS))) {
+            String linea, rifa, termination, idIntegrante;
+            while ((linea = br.readLine()) != null) {
+                rifa = linea.split("=")[0];
+                idIntegrante = linea.split("=")[1];
+                // TERMINACIÓN
+                if (rifa.contains("*")){
+                    System.out.println("----------------------------");
+                    System.out.println("Terminación inicial: " + rifa);
+                    termination = rifa.substring(1);
+                    rifa = sortTermination(termination).toString();
+                    Integer intentos = 0;
+                    while ((!isRifaValida(rifa) || isRifaAsignada(Integer.valueOf(rifa))) && intentos < MAX_INTENTOS_TERMINACION) {
+                        rifa = sortTermination(termination).toString();
+                        intentos++;
+                    }
+                    if (intentos.equals(MAX_INTENTOS_TERMINACION)) {
+                        System.out.println("NO ES POSIBLE ENCONTRAR OTRO NÚMERO CON TERMINACIÓN " + termination + ". ESTÁN TODOS RESERVADOS");
+                    } else {
+                        System.out.println("Número generado: " + rifa);
+                    }
+                    System.out.println("----------------------------");
+                }
+                // FIN TERMINACIÓN
+                ok = asignarPedida(Integer.valueOf(idIntegrante), Integer.valueOf(rifa));
+                if (!ok) {
+                    IOException e = new IOException();
+                    throw e;
+                }
+            }
+        } catch (IOException e) {
+            throw e;
+        }
+        System.out.println("# FIN - initializeAsignacionRifasPedidas");
+    }
+
+    private static boolean isRifaValida(String rifa) {
+        return (Integer.valueOf(rifa) >= primerRifa && Integer.valueOf(rifa) <= ultimaRifa);
+    }
 	
 	// **********
 	// ASIGNACIÓN
 	// **********
-	
+
+    private static boolean isRifaAsignada(Integer rifa){
+        if (rifasAsignadas.get(rifa) == null) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    private static boolean asignarPedida(Integer idIntegrante, Integer rifa){
+        if (isRifaAsignada(rifa)) {
+            System.out.println("ERROR: Esta rifa ya está reservada para otro integrante. Numero rifa: " + rifa);
+            System.out.println("ERROR: Integrantes que la pidieron:  " + rifasAsignadas.get(rifa) + " y " + idIntegrante);
+            return false;
+        }
+        Integrante integrante = findIntegranteById(idIntegrante, true);
+        if (integrante == null) {
+            integrante = findIntegranteById(idIntegrante, false);
+            if (integrante == null) {
+                System.out.println("ERROR: El integrante "  + idIntegrante + " no existe.");
+            } else {
+                System.out.println("ERROR: El integrante "  + idIntegrante + " pidió más rifas que el máximo permitido para él que es " + getMaxRifasAPedir(integrante));
+            }
+            return false;
+        }
+        asignarRifa(rifa, integrante);
+        if (integrante.getSizeRifas() == getMaxRifasAPedir(integrante)) {
+            integrantesPrimerasRifas.remove(integrante);
+        }
+        return true;
+    }
+
 	private static void asignarRifa(Integer rifa, Integrante integrante) {
 		integrante.addRifa(rifa);
 		rifasAsignadas.put(rifa, integrante.getId());
@@ -113,6 +240,56 @@ public class App
 			completos++;
 		}
 	}
+
+    private static Integer getMaxRifasAPedir(Integrante integrante){
+        if (integrante.isConAcompanante()){
+            return 2*MAX_RIFAS_A_PEDIR;
+        } else {
+            return MAX_RIFAS_A_PEDIR;
+        }
+    }
+
+    private static Integer getRifasASortear(Integrante integrante){
+        if (integrante.isConAcompanante()){
+            return 2*CANT_RIFAS_POR_INTEGRANTE;
+        } else {
+            return CANT_RIFAS_POR_INTEGRANTE;
+        }
+    }
+
+    private static Integer sortDigit() {
+        Integer digit = Integer.valueOf((int) (rnd.nextDouble() * 10));
+        return digit;
+    }
+
+    private static Integer sortTermination(String termination) {
+        Integer length = termination.length();
+        switch (length) {
+            case 1:
+                termination = (sortDigit().toString()).concat(termination);
+                termination = String.valueOf(sortTermination(termination));
+                break;
+            case 2:
+                termination = (sortDigit().toString()).concat(termination);
+                termination = String.valueOf(sortTermination(termination));
+                break;
+            case 3:
+                termination = (sortDigit().toString()).concat(termination);
+                termination = String.valueOf(sortTermination(termination));
+                break;
+            case 4:
+                termination = (sortDigit().toString()).concat(termination);
+                termination = String.valueOf(sortTermination(termination));
+                break;
+            case 5:
+                break;
+
+            default:
+                break;
+        }
+
+        return Integer.valueOf(termination);
+    }
 	
 	// ***********
 	// IMPRESIONES
@@ -202,7 +379,24 @@ public class App
 		}
 		return min;
 	}
-	
+
+    private static Integrante findIntegranteById(Integer idBuscado, boolean primerasRifas){
+        if (primerasRifas){
+            for (Integrante integrante : integrantesPrimerasRifas) {
+                if (integrante.getId().equals(idBuscado)) {
+                    return integrante;
+                }
+            }
+        } else {
+            for (Integrante integrante : integrantes) {
+                if (integrante.getId().equals(idBuscado)) {
+                    return integrante;
+                }
+            }
+        }
+        System.out.println("ERROR: Integrante con ID " + idBuscado + " no encontrado");
+        return null;
+    }
 
 	// ******
 	// SORTEO
@@ -230,25 +424,27 @@ public class App
 		System.out.println();
 		System.out.println("***************************************");
 		System.out.println("Total titulares: " + cant_titulares);
+        System.out.println("Total acompañantes: " + cant_acompanantes);
 		System.out.println("Rifas sorteadas: " + rifasAsignadas.size());
 		System.out.println("Max cantidad rifas integrante: " + maxCantRifas());
 		System.out.println("Min cantidad rifas integrante: " + minCantRifas());
 		System.out.println("***************************************");
 		System.out.println();
 	}
-	
-	
+
 	// ******************
 	// PROGRAMA PRINCIPAL
 	// ******************
 	
     public static void sortear( String[] args ) throws Exception
     {
-    	FILENAME_PEDIDOS_EXTRA = FILENAME_PEDIDOS_EXTRA.concat(args[0]);
-    	FILENAME_RIFAS_DISPONIBLES = FILENAME_RIFAS_DISPONIBLES.concat(args[1]);
+        if (args.length > 2 && args[0] != null && args[1] != null){
+            FILENAME_PEDIDOS_EXTRA = FILENAME_PEDIDOS_EXTRA.concat(args[0]);
+            FILENAME_RIFAS_DISPONIBLES = FILENAME_RIFAS_DISPONIBLES.concat(args[1]);
+        }
     	System.out.println( "# PATH_PROJECT: " + PATH_PROJECT );
-    	PrintStream out = new PrintStream(new FileOutputStream("output.txt"));
-    	System.setOut(out);
+        PrintStream out = new PrintStream(new FileOutputStream("output.txt"));
+        System.setOut(out);
     	System.out.println();
     	System.out.println( "# INICIO PROGRAMA" );
 		Date fecha = new Date();

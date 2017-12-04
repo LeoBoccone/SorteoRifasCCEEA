@@ -7,11 +7,11 @@ import javax.swing.*;
 public class Main extends JPanel
                              implements ActionListener {
     static private final String newline = "\n";
-    JButton botonPedidosExtra, botonRifasDisponibles, botonSortear;
-    JTextArea log;
-    JFileChooser fc;
-    boolean pedidosExtraDefinida = false;
-    boolean rifasDisponiblesDefinida = false;
+    private JButton botonPedidosExtra, botonRifasDisponibles, botonSortear;
+    private JTextArea log;
+    private JFileChooser fc;
+    private boolean pedidosExtraDefinida = false;
+    private boolean rifasDisponiblesDefinida = false;
     public static String FILENAME_PEDIDOS_EXTRA_AUX = null;
     public static String FILENAME_RIFAS_DISPONIBLES_AUX = null;
 
@@ -71,16 +71,17 @@ public class Main extends JPanel
             }
             log.setCaretPosition(log.getDocument().getLength());
 	    } else if (e.getSource() == botonSortear) {
-            if (pedidosExtraDefinida && rifasDisponiblesDefinida){
+            //if (pedidosExtraDefinida && rifasDisponiblesDefinida){
             	log.append("Se va a realizar el sorteo." + newline);
                 System.err.println("--- Se va a realizar el sorteo.");
                 String[] parameters = {FILENAME_PEDIDOS_EXTRA_AUX, FILENAME_RIFAS_DISPONIBLES_AUX};
                 try {
-                	log.append("Se realizo el sorteo." + newline);
+                	log.append("Se realizará el sorteo." + newline);
     				App.sortear(parameters);
     			} catch (Exception e1) {
     				e1.printStackTrace();
     			}
+            /*
 	        } else {
 	        	if (!pedidosExtraDefinida && !rifasDisponiblesDefinida){
 	        		log.append("Todavía no se seleccionó el archivo de Disponibles ni de Pedidos." + newline);
@@ -90,18 +91,9 @@ public class Main extends JPanel
 	        		log.append("Todavía no se seleccionó el archivo de Pedidos." + newline);
 	        	}
 	        }
+	        */
 	        log.setCaretPosition(log.getDocument().getLength());
 	    }
-    }
-
-    protected static ImageIcon createImageIcon(String path) {
-        java.net.URL imgURL = Main.class.getResource(path);
-        if (imgURL != null) {
-            return new ImageIcon(imgURL);
-        } else {
-            System.err.println("Couldn't find file: " + path);
-            return null;
-        }
     }
 
     private static void createAndShowGUI() {
